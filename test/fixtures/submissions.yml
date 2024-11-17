@@ -1,0 +1,13 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  student: one
+  assignment: one
+  submission_date: 2024-11-17
+  marks_obtained: 1
+
+two:
+  student: two
+  assignment: two
+  submission_date: 2024-11-17
+  marks_obtained: 1
