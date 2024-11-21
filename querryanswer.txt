@@ -1,0 +1,205 @@
+====>Insert into students
+INSERT INTO students (id, name, email, date_of_birth, gender,  created_at, updated_at)
+VALUES 
+(1, 'Jayant', 'jayant@example.com', '2001-05-14', 'F', NOW(), NOW()),
+(2, 'John doe', 'John-doe@example.com', '2002-08-22', 'M', NOW(), NOW());
+
+====>Insert into assignments
+INSERT INTO assignments (title, due_date, total_marks, created_at, updated_at)
+VALUES 
+('Math Assignment 1', '2024-11-30', 100, NOW(), NOW()),
+('Science Assignment 1', '2024-12-05', 90, NOW(), NOW()),
+
+====>INSERT into submmissions
+INSERT INTO submissions (student_id, assignment_id, submission_date, marks_obtained, created_at, updated_at)
+VALUES 
+(1, 2, '2024-11-25', 85, NOW(), NOW()),
+(2, 1, '2024-11-25', 85, NOW(), NOW()),
+(1, 2, '2024-11-25', 85, NOW(), NOW()),
+(2, 1, '2024-11-25', 85, NOW(), NOW());
+
+====>Data Retrieval with Advanced Joins:
+1. Retrieve a list of all students and their submitted assignments, showing the assignment title, submission date, and marks obtained. If a student has not submitted an assignment, include their name with null values for assignment detail and what if marks_obtained is greater than 90
+SELECT
+  students.name AS student_name,
+  assignments.title AS assignment_title,
+  submissions.submission_date,
+  submissions.marks_obtained
+FROM
+  students
+LEFT JOIN
+  submissions ON students.id = submissions.student_id
+LEFT JOIN
+  assignments ON submissions.assignment_id = assignments.id
+WHERE
+  submissions.marks_obtained > 90;
+
+====>  Aggregation and Ranking:
+1. Calculate the average marks for each assignment, showing the assignment title and the average marks obtained by students.
+SELECT
+  assignments.title AS assignment_title,
+  AVG(submissions.marks_obtained) AS average_marks
+FROM
+  submissions
+INNER JOIN
+  assignments ON submissions.assignment_id = assignments.id
+GROUP BY
+  assignments.title;
+
+2. For each assignment, rank students by their marks in descending order, listing the student name, assignment title, marks obtained, and rank
+SELECT 
+  students.name AS student_name,
+  assignments.title AS assignment_title,
+  submissions.marks_obtained,
+  RANK() OVER (PARTITION BY assignments.id ORDER BY submissions.marks_obtained DESC) AS rank
+FROM 
+  submissions
+JOIN 
+  students ON students.id = submissions.student_id
+JOIN 
+  assignments ON assignments.id = submissions.assignment_id
+ORDER BY 
+  rank;
+  
+====>  Conditional and Grouped Filtering:
+1. Find students who have submitted all assignments on time (i.e., before the due date)
+SELECT 
+  students.name AS student_name
+FROM 
+  students
+JOIN 
+  submissions ON students.id = submissions.student_id
+JOIN 
+  assignments ON submissions.assignment_id = assignments.id
+GROUP BY 
+  students.id
+HAVING 
+  COUNT(CASE WHEN submissions.submission_date <= assignments.due_date THEN 1 END) = (SELECT COUNT(*) FROM assignments);
+
+2. Retrieve assignments where more than 50% of students scored above 75% of the total marks.
+SELECT 
+  assignments.id,
+  assignments.title, 
+  assignments.total_marks
+FROM
+  assignments
+JOIN 
+  submissions ON assignments.id = submissions.assignment_id
+JOIN
+  students ON submissions.student_id = students.id
+GROUP BY
+  assignments.id
+HAVING
+  COUNT(CASE WHEN submissions.marks_obtained > 0.75 * assignments.total_marks THEN 1 END) > 
+  (SELECT COUNT(*) / 2 FROM students);
+
+=====> Nested Queries and Subqueries:
+1. List students whose average marks across all submissions are in the top 10% of the class
+WITH student_averages AS (
+  SELECT
+    students.id AS student_id,
+    AVG(submissions.marks_obtained) AS average_marks
+  FROM
+    students
+  JOIN
+    submissions ON students.id = submissions.student_id
+  JOIN
+    assignments ON submissions.assignment_id = assignments.id
+  GROUP BY
+    students.id
+),
+percentile AS (
+  SELECT
+    percentile_cont(0.9) WITHIN GROUP (ORDER BY average_marks DESC) AS top_10_percent
+  FROM
+    student_averages
+)
+SELECT
+  students.id,
+  students.name AS student_name
+FROM
+  students
+JOIN
+  student_averages ON students.id = student_averages.student_id
+JOIN
+  percentile ON student_averages.average_marks > percentile.top_10_percent;
+
+
+2.Identify students who haven't submitted at least one assignment.
+SELECT
+  students.name AS student_name
+FROM 
+  students
+LEFT JOIN
+  submissions ON students.id = submissions.student_id
+WHERE
+  submissions.assignment_id IS NULL;
+
+
+=====> Updating Data with Conditions:
+1. Write a query to update all submissions for a specific assignment to increase marks by 5% if the assignment's average score is below 60%
+UPDATE submissions
+SET marks_obtained = marks_obtained * 1.05
+WHERE assignment_id = 1
+AND (
+    SELECT AVG(marks_obtained)
+    FROM submissions
+    WHERE assignment_id = 1
+) < 60;
+
+2. For any submissions with null marks, assign a default score of 50% of the total marks.
+UPDATE
+  submissions
+SET 
+  marks_obtained = assignments.total_marks * 0.5
+FROM 
+  assignments
+WHERE 
+  submissions.assignment_id = assignments.id
+  AND submissions.marks_obtained IS NULL;
+
+
+=====> Deletion with Referential Integrity:
+1. Write a query to delete all submissions for a student who has withdrawn, based on student_id.
+DELETE FROM submissions WHERE student_id = [any_student_id]; 
+
+2. • Delete an assignment from the database, ensuring all related submissions are removed without orphaning any records.
+DELETE FROM assignments where id = [any_assignment_id];
+
+=====> Complex Aggregation Using Grouping Sets:
+1. Generate a report showing the average marks grouped by assignment and gender of the students. Use grouping sets or roll-up functionality to allow different levels of aggregation within a single query.
+Using grouping-sets
+SELECT
+  assignments.title AS assignment_title,
+  students.gender AS student_gender,
+  AVG(submissions.marks_obtained) AS avg_marks
+FROM 
+  submissions
+JOIN 
+  students ON students.id = submissions.student_id
+JOIN 
+  assignments ON assignments.id = submissions.assignment_id
+GROUP BY
+  GROUPING SETS (
+    (assignments.title, students.gender),  
+    (assignments.title),   
+    (students.gender)                 
+  )
+ORDER BY 
+  assignment_title, student_gender;
+
+Using roll-up 
+SELECT 
+  assignments.title AS assignment_title,
+  students.gender AS student_gender,
+  AVG(submissions.marks_obtained) AS avg_marks
+FROM 
+  students
+JOIN 
+  submissions ON students.id = submissions.student_id
+JOIN 
+  assignments ON assignments.id = submissions.assignment_id
+GROUP BY 
+  ROLLUP (assignments.title, students.gender)
+ORDER BY 
+  assignment_title, student_gender;
